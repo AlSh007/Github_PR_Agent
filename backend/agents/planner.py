@@ -1,11 +1,9 @@
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from graph.state import AgentState
-from tools.cost_tracker import extract_cost
-
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+from tools.cost_tracker import calculate_cost
+from tools.llm import invoke_structured
 
 
 class PlanOutput(BaseModel):
@@ -13,8 +11,6 @@ class PlanOutput(BaseModel):
     files_to_modify: list[str]
     acceptance_criteria: list[str]
 
-
-structured_llm = llm.with_structured_output(PlanOutput, include_raw=True)
 
 SYSTEM = """You are a senior software engineer. Given a GitHub issue, produce:
 1. A clear implementation plan (step-by-step)
@@ -26,25 +22,26 @@ Be specific and concise. Only plan changes that are necessary to resolve the iss
 
 def planner_node(state: AgentState) -> dict:
     extra = state.get("extra_instructions", "")
+    repo_context = state.get("repo_context", "") or "No repo context available."
+
     user_msg = f"""GitHub Issue: {state['issue_title']}
 
 {state['issue_body']}
 
-Repository files available:
-{chr(10).join(state.get('relevant_files', {}).keys()) or 'None fetched yet'}
+Repository context:
+{repo_context}
 """
     if extra:
         user_msg += f"\n\nAdditional instructions from human reviewer:\n{extra}"
 
     messages = [SystemMessage(content=SYSTEM), HumanMessage(content=user_msg)]
-    response = structured_llm.invoke(messages)
+    result, usage = invoke_structured(PlanOutput, messages)
 
-    result: PlanOutput = response["parsed"]
-    cost = extract_cost(response["raw"]) + state.get("run_cost_usd", 0.0)
+    cost = calculate_cost(usage.get("input_tokens", 0), usage.get("output_tokens", 0))
 
     return {
         "plan": result.plan,
         "files_to_modify": result.files_to_modify,
         "acceptance_criteria": result.acceptance_criteria,
-        "run_cost_usd": cost,
+        "run_cost_usd": state.get("run_cost_usd", 0.0) + cost,
     }

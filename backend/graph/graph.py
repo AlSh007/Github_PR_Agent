@@ -7,12 +7,13 @@ from agents.planner import planner_node
 from agents.coder import coder_node
 from agents.reviewer import reviewer_node
 from agents.pr_writer import pr_writer_node
-from graph.nodes import human_approval_node, file_fetcher_node, route_after_review, route_after_human
+from graph.nodes import human_approval_node, file_fetcher_node, repo_explorer_node, route_after_review, route_after_human
 
 
 def build_graph(checkpointer=None):
     builder = StateGraph(AgentState)
 
+    builder.add_node("repo_explorer", repo_explorer_node)
     builder.add_node("planner", planner_node)
     builder.add_node("file_fetcher", file_fetcher_node)
     builder.add_node("coder", coder_node)
@@ -20,7 +21,8 @@ def build_graph(checkpointer=None):
     builder.add_node("human_approval", human_approval_node)
     builder.add_node("pr_writer", pr_writer_node)
 
-    builder.set_entry_point("planner")
+    builder.set_entry_point("repo_explorer")
+    builder.add_edge("repo_explorer", "planner")
     builder.add_edge("planner", "file_fetcher")
     builder.add_edge("file_fetcher", "coder")
     builder.add_edge("coder", "reviewer")

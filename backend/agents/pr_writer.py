@@ -1,11 +1,10 @@
-from langchain_groq import ChatGroq
+import re
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from graph.state import AgentState
 from tools.github_tools import create_pr
-
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+from tools.llm import invoke_structured
 
 
 class PRMetadata(BaseModel):
@@ -13,8 +12,6 @@ class PRMetadata(BaseModel):
     body: str
     branch_name: str
 
-
-structured_llm = llm.with_structured_output(PRMetadata)
 
 SYSTEM = """You are a developer writing a pull request. Given the issue and implementation plan,
 produce a clear PR title, a markdown body (what changed and why, linked to the issue),
@@ -34,7 +31,7 @@ Files changed: {', '.join(d['path'] for d in state.get('file_diffs', []))}
 """
 
     messages = [SystemMessage(content=SYSTEM), HumanMessage(content=user_msg)]
-    meta: PRMetadata = structured_llm.invoke(messages)
+    meta, _ = invoke_structured(PRMetadata, messages)
 
     pr_url = create_pr(
         repo_full_name=state["repo_full_name"],
@@ -49,7 +46,6 @@ Files changed: {', '.join(d['path'] for d in state.get('file_diffs', []))}
 
 
 def _parse_issue_number(issue_url: str) -> tuple[str, int]:
-    import re
     match = re.search(r"github\.com/([^/]+/[^/]+)/issues/(\d+)", issue_url)
     if not match:
         raise ValueError(f"Cannot parse issue URL: {issue_url}")

@@ -1,19 +1,15 @@
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from graph.state import AgentState, ReviewVerdict
-from tools.cost_tracker import extract_cost
-
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+from tools.cost_tracker import calculate_cost
+from tools.llm import invoke_structured
 
 
 class ReviewOutput(BaseModel):
     approved: bool
     issues: list[str]
 
-
-structured_llm = llm.with_structured_output(ReviewOutput, include_raw=True)
 
 SYSTEM = """You are a senior code reviewer. Given the implementation plan, acceptance criteria,
 and the proposed file changes, determine if the implementation is correct and complete.
@@ -36,15 +32,11 @@ Proposed changes:
 """
 
     messages = [SystemMessage(content=SYSTEM), HumanMessage(content=user_msg)]
-    response = structured_llm.invoke(messages)
+    result, usage = invoke_structured(ReviewOutput, messages)
 
-    result: ReviewOutput = response["parsed"]
-    cost = extract_cost(response["raw"]) + state.get("run_cost_usd", 0.0)
+    cost = calculate_cost(usage.get("input_tokens", 0), usage.get("output_tokens", 0))
 
     return {
-        "review_verdict": ReviewVerdict(
-            approved=result.approved,
-            issues=result.issues,
-        ),
-        "run_cost_usd": cost,
+        "review_verdict": ReviewVerdict(approved=result.approved, issues=result.issues),
+        "run_cost_usd": state.get("run_cost_usd", 0.0) + cost,
     }

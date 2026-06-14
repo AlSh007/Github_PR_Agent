@@ -1,6 +1,20 @@
 from langgraph.graph import END
 from graph.state import AgentState
-from tools.github_tools import fetch_files
+from tools.github_tools import fetch_files, fetch_repo_context
+
+
+def repo_explorer_node(state: AgentState) -> dict:
+    """Fetches repo file tree + key file contents before the planner runs."""
+    if not state.get("repo_full_name"):
+        return {"repo_context": ""}
+    try:
+        context = fetch_repo_context(state["repo_full_name"])
+        print(f"[repo_explorer] fetched {len(context)} chars for {state['repo_full_name']}")
+        print(f"[repo_explorer] preview:\n{context[:500]}\n---")
+        return {"repo_context": context}
+    except Exception as e:
+        print(f"[repo_explorer] ERROR: {e}")
+        return {"repo_context": f"Error fetching repo context: {e}"}
 
 
 def file_fetcher_node(state: AgentState) -> dict:

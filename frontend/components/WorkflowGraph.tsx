@@ -1,29 +1,37 @@
 "use client";
 
-import ReactFlow, { Node, Edge, Background, Controls, MarkerType } from "reactflow";
+import ReactFlow, { Node, Edge, Background, MarkerType } from "reactflow";
 import "reactflow/dist/style.css";
 
-const NODES_ORDER = ["planner", "file_fetcher", "coder", "reviewer", "human_approval", "pr_writer"];
+const NODES_ORDER = ["repo_explorer", "planner", "file_fetcher", "coder", "reviewer", "human_approval", "pr_writer"];
 const LABELS: Record<string, string> = {
-  planner: "Planner",
-  file_fetcher: "File Fetcher",
-  coder: "Coder",
-  reviewer: "Reviewer",
+  repo_explorer:  "Repo Explorer",
+  planner:        "Planner",
+  file_fetcher:   "File Fetcher",
+  coder:          "Coder",
+  reviewer:       "Reviewer",
   human_approval: "Human Approval",
-  pr_writer: "PR Writer",
+  pr_writer:      "PR Writer",
 };
 
-function statusColor(nodeName: string, activeNode: string | null, runStatus: string): string {
-  const idx = NODES_ORDER.indexOf(nodeName);
+type NodeStatus = "pending" | "active" | "done" | "final";
+
+function getNodeStatus(name: string, activeNode: string | null, runStatus: string): NodeStatus {
+  const idx = NODES_ORDER.indexOf(name);
   const activeIdx = NODES_ORDER.indexOf(activeNode ?? "");
 
-  if (runStatus === "completed" || (activeIdx === -1 && runStatus !== "running")) {
-    return nodeName === "pr_writer" && runStatus === "completed" ? "#22c55e" : "#94a3b8";
-  }
-  if (activeNode === nodeName) return "#f59e0b";
-  if (activeIdx > idx) return "#22c55e";
-  return "#cbd5e1";
+  if (runStatus === "completed") return name === "pr_writer" ? "final" : "done";
+  if (activeNode === name) return "active";
+  if (activeIdx > idx) return "done";
+  return "pending";
 }
+
+const NODE_STYLES: Record<NodeStatus, React.CSSProperties> = {
+  pending: { background: "#1c2333", border: "1px solid #30363d", color: "#8b949e" },
+  active:  { background: "#1f3a5f", border: "1px solid #388bfd", color: "#79c0ff", fontWeight: 600 },
+  done:    { background: "#132b1e", border: "1px solid #238636", color: "#3fb950" },
+  final:   { background: "#1a4731", border: "2px solid #3fb950", color: "#56d364", fontWeight: 700 },
+};
 
 interface Props {
   activeNode: string | null;
@@ -31,35 +39,62 @@ interface Props {
 }
 
 export default function WorkflowGraph({ activeNode, runStatus }: Props) {
-  const nodes: Node[] = NODES_ORDER.map((id, i) => ({
-    id,
-    position: { x: 250, y: i * 100 },
-    data: { label: LABELS[id] },
-    style: {
-      background: statusColor(id, activeNode, runStatus),
-      border: activeNode === id ? "2px solid #f59e0b" : "1px solid #e2e8f0",
-      borderRadius: 8,
-      padding: "8px 16px",
-      fontWeight: activeNode === id ? 700 : 400,
-      color: activeNode === id ? "#fff" : "#1e293b",
-      minWidth: 140,
-      textAlign: "center" as const,
-    },
-  }));
+  const nodes: Node[] = NODES_ORDER.map((id, i) => {
+    const status = getNodeStatus(id, activeNode, runStatus);
+    return {
+      id,
+      position: { x: 60, y: i * 82 },
+      data: {
+        label: (
+          <div className="flex items-center gap-2">
+            {status === "active" && (
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
+            )}
+            {status === "done" && (
+              <span className="text-emerald-400 shrink-0">✓</span>
+            )}
+            {status === "final" && (
+              <span className="text-emerald-400 shrink-0">✓</span>
+            )}
+            {status === "pending" && (
+              <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
+            )}
+            <span>{LABELS[id]}</span>
+          </div>
+        ),
+      },
+      style: {
+        ...NODE_STYLES[status],
+        borderRadius: 8,
+        padding: "8px 14px",
+        fontSize: 12,
+        minWidth: 148,
+        textAlign: "left" as const,
+      },
+    };
+  });
 
   const edges: Edge[] = NODES_ORDER.slice(0, -1).map((src, i) => ({
     id: `e-${i}`,
     source: src,
     target: NODES_ORDER[i + 1],
-    markerEnd: { type: MarkerType.ArrowClosed },
-    style: { stroke: "#94a3b8" },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#30363d" },
+    style: { stroke: "#30363d", strokeWidth: 1.5 },
   }));
 
   return (
-    <div style={{ height: 640, width: "100%" }}>
-      <ReactFlow nodes={nodes} edges={edges} fitView nodesDraggable={false} nodesConnectable={false}>
-        <Background />
-        <Controls />
+    <div style={{ height: 680, width: "100%", background: "#0d1117" }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+        fitViewOptions={{ padding: 0.3 }}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        zoomOnScroll={false}
+        panOnDrag={false}
+      >
+        <Background color="#21262d" gap={20} />
       </ReactFlow>
     </div>
   );

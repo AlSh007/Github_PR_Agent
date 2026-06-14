@@ -44,6 +44,7 @@ async def create_run(body: RunRequest):
         "issue_body": issue_data["issue_body"],
         "repo_full_name": issue_data["repo_full_name"],
         "relevant_files": {},
+        "repo_context": "",
         "retry_count": 0,
         "run_cost_usd": 0.0,
         "messages": [],
@@ -85,4 +86,5 @@ def get_run_state(run_id: str):
         "run_cost_usd": values.get("run_cost_usd", 0.0),
         "pr_url": values.get("pr_url") or (db_run or {}).get("pr_url"),
         "next_node": list(checkpoint_state.next) if checkpoint_state and checkpoint_state.next else [],
+        "repo_context": values.get("repo_context", ""),
     }

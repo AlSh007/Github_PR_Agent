@@ -22,6 +22,7 @@ class AgentState(TypedDict):
     issue_title: str
     issue_body: str
     repo_full_name: str   # "owner/repo"
+    repo_context: str     # file tree + key file snapshots
     relevant_files: dict[str, str]  # path → current content
 
     # Agent outputs

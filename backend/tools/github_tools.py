@@ -32,6 +32,67 @@ def fetch_issue(issue_url: str) -> dict:
     }
 
 
+PRIORITY_FILES = [
+    "README.md", "readme.md", "README.rst",
+    "main.py", "app.py", "index.py", "server.py",
+    "main.ts", "index.ts", "app.ts",
+    "main.js", "index.js", "app.js",
+    "package.json", "pyproject.toml", "setup.py",
+]
+
+MAX_FILE_CHARS = 3000  # truncate large files so we don't blow the context window
+
+
+def fetch_repo_context(repo_full_name: str) -> str:
+    """Return a snapshot of the repo: file tree + content of key files."""
+    repo = _client().get_repo(repo_full_name)
+
+    # Get flat file tree (up to 300 files)
+    try:
+        tree = repo.get_git_tree(repo.default_branch, recursive=True).tree
+        all_paths = [f.path for f in tree if f.type == "blob"]
+    except GithubException:
+        all_paths = []
+
+    tree_str = "\n".join(all_paths[:300])
+
+    SKIP_EXTENSIONS = (".png", ".jpg", ".gif", ".ico", ".svg", ".woff", ".ttf", ".lock", ".pyc")
+    SKIP_NAMES = ("__init__.py", ".gitignore", ".gitkeep", ".DS_Store")
+
+    def is_substantive(path: str) -> bool:
+        filename = path.split("/")[-1]
+        return (
+            not path.endswith(SKIP_EXTENSIONS)
+            and filename not in SKIP_NAMES
+            and not path.startswith("venv/")
+            and not path.startswith("node_modules/")
+            and not path.startswith(".git/")
+        )
+
+    # Priority files first, then substantive extras sorted by likely importance
+    to_read = [p for p in PRIORITY_FILES if p in all_paths]
+    extras = sorted(
+        [p for p in all_paths if p not in to_read and is_substantive(p)],
+        # prefer shorter paths (root-level or shallow files) and .py/.ts files
+        key=lambda p: (p.count("/"), not p.endswith((".py", ".ts", ".js", ".md")))
+    )
+    to_read += extras[:max(0, 8 - len(to_read))]
+
+    file_snapshots = []
+    for path in to_read:
+        try:
+            content = repo.get_contents(path).decoded_content.decode("utf-8", errors="replace")
+            if not content.strip():
+                continue  # skip empty files
+            if len(content) > MAX_FILE_CHARS:
+                content = content[:MAX_FILE_CHARS] + "\n... (truncated)"
+            file_snapshots.append(f"### {path}\n```\n{content}\n```")
+        except Exception:
+            pass
+
+    return f"## File tree\n{tree_str}\n\n## Key file contents\n" + "\n\n".join(file_snapshots)
+
+
 def fetch_files(repo_full_name: str, paths: list[str]) -> dict[str, str]:
     repo = _client().get_repo(repo_full_name)
     result = {}
